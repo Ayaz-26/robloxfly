@@ -1,128 +1,134 @@
--- Load Rayfield UI
-local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+--// Load Rayfield UI
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
-local flying = false
-local flySpeed = 10
-local verticalSpeed = 5
-local bodyGyro, bodyVelocity
-local up = false
-local down = false
-
--- Create Window
+--// Create Main Window
 local Window = Rayfield:CreateWindow({
     Name = "Hacker vs Roblox | Mods",
     LoadingTitle = "Loading Mods...",
-    LoadingSubtitle = "By You",
+    LoadingSubtitle = "Made by You",
     ConfigurationSaving = {
         Enabled = false,
         FolderName = nil,
         FileName = "HackerVsRobloxUI"
     },
-    Discord = { Enabled = false },
+    Discord = {Enabled = false},
     KeySystem = false
 })
 
 local MainTab = Window:CreateTab("🏠 Main", nil)
-MainTab:CreateSection("Fly Module")
+local FlySection = MainTab:CreateSection("Fly Module")
 
--- Function: Start Flying
+local flying = false
+local flySpeed = 10
+local verticalSpeed = 5
+local bodyGyro, bodyVelocity
+local UIS = game:GetService("UserInputService")
+
+--// Stop Fly
+local function stopFly()
+    local char = game.Players.LocalPlayer.Character
+    if bodyGyro then bodyGyro:Destroy() end
+    if bodyVelocity then bodyVelocity:Destroy() end
+    if char and char:FindFirstChild("Humanoid") then
+        char.Humanoid:ChangeState(Enum.HumanoidStateType.Freefall)
+    end
+end
+
+--// Start Fly
 local function startFly()
     local char = game.Players.LocalPlayer.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return end
 
-    bodyGyro = Instance.new("BodyGyro")
-    bodyGyro.P = 9e4
-    bodyGyro.maxTorque = Vector3.new(9e9, 9e9, 9e9)
-    bodyGyro.CFrame = char.HumanoidRootPart.CFrame
-    bodyGyro.Parent = char.HumanoidRootPart
+    local hrp = char.HumanoidRootPart
+    local hum = char:FindFirstChildOfClass("Humanoid")
 
-    bodyVelocity = Instance.new("BodyVelocity")
-    bodyVelocity.velocity = Vector3.zero
-    bodyVelocity.maxForce = Vector3.new(9e9, 9e9, 9e9)
-    bodyVelocity.Parent = char.HumanoidRootPart
+    bodyGyro = Instance.new("BodyGyro", hrp)
+    bodyGyro.P = 9e4
+    bodyGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+    bodyGyro.CFrame = hrp.CFrame
+
+    bodyVelocity = Instance.new("BodyVelocity", hrp)
+    bodyVelocity.Velocity = Vector3.zero
+    bodyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+
+    -- Disable falling animation
+    hum:ChangeState(Enum.HumanoidStateType.Physics)
+
+    local up = false
+    local down = false
+    local moveVec = Vector3.zero
+
+    -- Mobile button compatibility
+    local inputVec = Vector3.zero
+
+    UIS.InputBegan:Connect(function(input)
+        if input.KeyCode == Enum.KeyCode.E then up = true end
+        if input.KeyCode == Enum.KeyCode.Q then down = true end
+    end)
+    UIS.InputEnded:Connect(function(input)
+        if input.KeyCode == Enum.KeyCode.E then up = false end
+        if input.KeyCode == Enum.KeyCode.Q then down = false end
+    end)
 
     task.spawn(function()
-        while flying and char and char:FindFirstChild("HumanoidRootPart") do
-            local hrp = char.HumanoidRootPart
-            local humanoid = char:FindFirstChildOfClass("Humanoid")
-            if not humanoid then break end
+        while flying and char and hrp and hum do
+            local horizontal = Vector3.zero
+            if UIS:IsKeyDown(Enum.KeyCode.W) then horizontal = horizontal + Vector3.new(0, 0, -1) end
+            if UIS:IsKeyDown(Enum.KeyCode.S) then horizontal = horizontal + Vector3.new(0, 0, 1) end
+            if UIS:IsKeyDown(Enum.KeyCode.A) then horizontal = horizontal + Vector3.new(-1, 0, 0) end
+            if UIS:IsKeyDown(Enum.KeyCode.D) then horizontal = horizontal + Vector3.new(1, 0, 0) end
 
-            -- Mobile joystick movement
-            local moveVec = humanoid.MoveDirection * flySpeed
-
-            -- Vertical control
-            if up then moveVec += Vector3.new(0, verticalSpeed, 0) end
-            if down then moveVec -= Vector3.new(0, verticalSpeed, 0) end
-
-            bodyVelocity.Velocity = moveVec
-
-            if moveVec.Magnitude > 0 then
-                bodyGyro.CFrame = CFrame.new(hrp.Position, hrp.Position + moveVec)
+            if horizontal.Magnitude > 0 then
+                horizontal = horizontal.Unit * flySpeed
             end
 
+            moveVec = Vector3.zero
+            if up then moveVec = moveVec + Vector3.new(0, verticalSpeed, 0) end
+            if down then moveVec = moveVec - Vector3.new(0, verticalSpeed, 0) end
+
+            bodyVelocity.Velocity = horizontal + moveVec
+            bodyGyro.CFrame = CFrame.new(hrp.Position, hrp.Position + Vector3.new(0, 0, -1))
             task.wait()
         end
     end)
 end
 
--- Function: Stop Flying
-local function stopFly()
-    if bodyGyro then bodyGyro:Destroy() bodyGyro = nil end
-    if bodyVelocity then bodyVelocity:Destroy() bodyVelocity = nil end
-end
-
--- Toggle Fly
-MainTab:CreateToggle({
+--// Toggle Fly
+local FlyToggle = MainTab:CreateToggle({
     Name = "Enable Fly",
     CurrentValue = false,
-    Callback = function(value)
-        flying = value
-        if flying then
-            startFly()
-            flyButtons.Visible = true
-        else
-            stopFly()
-            flyButtons.Visible = false
-        end
-    end
+    Callback = function(Value)
+        flying = Value
+        if flying then startFly() else stopFly() end
+    end,
 })
 
--- Sliders
+--// Speed Sliders
 MainTab:CreateSlider({
     Name = "Fly Speed",
     Range = {1, 30},
     Increment = 1,
     CurrentValue = 10,
-    Callback = function(v)
-        flySpeed = v
-    end
+    Callback = function(Value) flySpeed = Value end
 })
-
 MainTab:CreateSlider({
     Name = "Vertical Speed",
     Range = {1, 30},
     Increment = 1,
     CurrentValue = 5,
-    Callback = function(v)
-        verticalSpeed = v
-    end
+    Callback = function(Value) verticalSpeed = Value end
 })
 
--- No Cooldown (basic universal pattern)
+--// No Cooldown Bypass
 MainTab:CreateToggle({
     Name = "No Cooldown",
     CurrentValue = false,
-    Callback = function(toggle)
-        if toggle then
-            for _, v in pairs(getgc(true)) do
-                if typeof(v) == "function" and islclosure(v) then
-                    local constants = debug.getconstants(v)
-                    for i, c in pairs(constants) do
-                        if type(c) == "string" and c:lower():find("cooldown") then
-                            pcall(function()
-                                debug.setconstant(v, i, 0)
-                            end)
-                        end
+    Callback = function(Value)
+        for _, v in pairs(getgc(true)) do
+            if type(v) == "function" and getfenv(v).script and not is_synapse_function(v) then
+                for i, const in pairs(debug.getconstants(v)) do
+                    if tostring(const):lower():find("cooldown") then
+                        debug.setconstant(v, i, 0)
                     end
                 end
             end
@@ -130,42 +136,55 @@ MainTab:CreateToggle({
     end
 })
 
--- Mobile UI for Fly Up/Down
-local CoreGui = game:GetService("CoreGui")
-local flyButtons = Instance.new("ScreenGui")
-flyButtons.Name = "FlyButtonsGui"
-flyButtons.Parent = CoreGui
-flyButtons.ResetOnSpawn = false
-flyButtons.IgnoreGuiInset = true
-flyButtons.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-flyButtons.Enabled = true
-flyButtons.DisplayOrder = 1000
-flyButtons.Visible = false
+--// Mobile UI Buttons
+local playerGui = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+local flyGui = Instance.new("ScreenGui", playerGui)
+flyGui.Name = "FlyControlGui"
+flyGui.ResetOnSpawn = false
 
-local function createButton(name, position, onPress, onRelease)
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0, 100, 0, 40)
-    btn.Position = position
-    btn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    btn.Text = name
-    btn.Parent = flyButtons
-    btn.AutoButtonColor = true
+-- Fly Shortcut
+local shortcut = Instance.new("TextButton")
+shortcut.Size = UDim2.new(0, 100, 0, 40)
+shortcut.Position = UDim2.new(0, 10, 0, 50)
+shortcut.Text = "Fly"
+shortcut.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+shortcut.TextColor3 = Color3.fromRGB(255, 255, 255)
+shortcut.Parent = flyGui
+shortcut.MouseButton1Click:Connect(function()
+    FlyToggle:Set(true)
+end)
 
-    btn.MouseButton1Down:Connect(function()
-        onPress()
-    end)
-    btn.MouseButton1Up:Connect(function()
-        onRelease()
-    end)
-end
+-- Up Button
+local upBtn = Instance.new("TextButton")
+upBtn.Size = UDim2.new(0, 60, 0, 40)
+upBtn.Position = UDim2.new(1, -70, 1, -140)
+upBtn.AnchorPoint = Vector2.new(0, 0)
+upBtn.Text = "Up"
+upBtn.BackgroundColor3 = Color3.fromRGB(60, 90, 180)
+upBtn.TextColor3 = Color3.new(1,1,1)
+upBtn.Parent = flyGui
+upBtn.MouseButton1Down:Connect(function() _G.up = true end)
+upBtn.MouseButton1Up:Connect(function() _G.up = false end)
 
-createButton("Up", UDim2.new(1, -110, 1, -140),
-    function() up = true end,
-    function() up = false end
-)
+-- Down Button
+local downBtn = Instance.new("TextButton")
+downBtn.Size = UDim2.new(0, 60, 0, 40)
+downBtn.Position = UDim2.new(1, -70, 1, -90)
+downBtn.AnchorPoint = Vector2.new(0, 0)
+downBtn.Text = "Down"
+downBtn.BackgroundColor3 = Color3.fromRGB(180, 60, 60)
+downBtn.TextColor3 = Color3.new(1,1,1)
+downBtn.Parent = flyGui
+downBtn.MouseButton1Down:Connect(function() _G.down = true end)
+downBtn.MouseButton1Up:Connect(function() _G.down = false end)
 
-createButton("Down", UDim2.new(1, -110, 1, -90),
-    function() down = true end,
-    function() down = false end
-)
+-- Link to fly logic
+task.spawn(function()
+    while true do
+        if flying then
+            _G.up = _G.up or false
+            _G.down = _G.down or false
+        end
+        wait()
+    end
+end)
